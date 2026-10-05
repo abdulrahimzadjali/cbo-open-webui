@@ -1,0 +1,15 @@
+FROM ghcr.io/open-webui/open-webui:main
+
+# Copy CBO brand master assets
+COPY static/cbo/ /app/build/cbo/
+COPY static/cbo/ /app/build/static/cbo/
+COPY static/cbo/ /app/backend/open_webui/static/cbo/
+
+# Copy CBO static assets, custom.css, favicons, splash, and manifest
+COPY static/favicon.png /app/build/favicon.png
+COPY static/favicon.png /app/backend/open_webui/static/favicon.png
+COPY static/static/ /app/build/static/
+COPY static/static/ /app/backend/open_webui/static/
+
+# Patch env.py to support clean CBO AI title without suffix
+RUN python -c "import re; p='/app/backend/open_webui/env.py'; c=open(p).read(); c=re.sub(r'WEBUI_NAME \+= [^\n]+', 'pass', c); open(p,'w').write(c)"
