@@ -1,0 +1,142 @@
+/**
+ * Central Bank of Oman (CBO) Custom Branding Stylesheet
+ * 
+ * Open WebUI loads this file automatically via src/app.html.
+ * Maintaining all customizations here avoids merge conflicts with upstream releases.
+ */
+
+:root {
+    --cbo-red: #d32917;
+    --cbo-red-hover: #b72111;
+    --cbo-red-subtle: rgba(211, 41, 23, 0.08);
+    --cbo-gold: #d2bf97;
+    --cbo-gold-border: rgba(210, 191, 150, 0.45);
+    --cbo-bronze: #6d4d15;
+    --cbo-bg-warm: #fcfbfa;
+}
+
+/* -------------------------------------------------------------
+ * 1. Brand Integrity: Prevent Color Inversion in Dark Mode
+ * ------------------------------------------------------------- */
+.dark img[src*="splash"],
+.dark img[src*="favicon"],
+.dark img[src*="logo"],
+.dark img[src*="/cbo/"] {
+    filter: none !important;
+}
+
+/* -------------------------------------------------------------
+ * 2. Authentication / Login Page Branding
+ * ------------------------------------------------------------- */
+#auth-page {
+    position: relative;
+    background-color: #faf7f2;
+    background-image:
+        radial-gradient(ellipse at bottom right, rgba(210, 191, 150, 0.35), transparent 65%),
+        linear-gradient(to bottom, rgba(250, 247, 242, 0.88) 0%, rgba(250, 247, 242, 0.72) 100%),
+        url('/static/cbo/cbo-building-hero.png');
+    background-repeat: no-repeat;
+    background-position: center bottom, center, center bottom;
+    background-size: cover, cover, contain;
+}
+
+.dark #auth-page {
+    background-color: #0c1017;
+    background-image:
+        radial-gradient(ellipse at bottom right, rgba(210, 191, 150, 0.15), transparent 65%),
+        linear-gradient(to bottom, rgba(12, 16, 23, 0.92) 0%, rgba(12, 16, 23, 0.80) 100%),
+        url('/static/cbo/cbo-building-hero.png');
+    background-repeat: no-repeat;
+    background-position: center bottom, center, center bottom;
+    background-size: cover, cover, contain;
+}
+
+/* Allow the majestic building backdrop to show through the default background overlay */
+#auth-page > div.absolute.top-0.left-0 {
+    opacity: 0.1 !important;
+}
+
+/* Elevated CBO Glassmorphism Card for Sign-in */
+#auth-login-card {
+    background: rgba(255, 255, 255, 0.90) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    border: 1px solid var(--cbo-gold-border) !important;
+    border-radius: 1.25rem !important;
+    padding: 2.25rem 2rem !important;
+    box-shadow: 0 20px 45px -15px rgba(109, 77, 21, 0.15), 0 0 1px 1px rgba(210, 191, 150, 0.25) !important;
+}
+
+.dark #auth-login-card {
+    background: rgba(17, 24, 39, 0.88) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(210, 191, 150, 0.25) !important;
+    box-shadow: 0 20px 45px -15px rgba(0, 0, 0, 0.6), 0 0 1px 1px rgba(210, 191, 150, 0.15) !important;
+}
+
+/* CBO Full Bilingual Logo above the sign-in form */
+#auth-login-card::before {
+    content: "";
+    display: block;
+    width: 280px;
+    height: 70px;
+    margin: 0 auto 1.25rem auto;
+    background: url('/static/cbo/cbo-logo-horizontal.png') no-repeat center center;
+    background-size: contain;
+}
+
+/* Circular Seal inside Auth Card */
+#auth-login-card #logo {
+    border: 2px solid rgba(210, 191, 150, 0.6);
+    box-shadow: 0 4px 16px rgba(211, 41, 23, 0.15);
+    background: #ffffff;
+    padding: 0.25rem;
+}
+
+.dark #auth-login-card #logo {
+    border: 2px solid rgba(210, 191, 150, 0.4);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    background: #ffffff;
+    padding: 0.25rem;
+}
+
+/* Primary Auth Submit Button */
+#auth-login-card form button[type="submit"] {
+    background-color: var(--cbo-red) !important;
+    color: #ffffff !important;
+    font-weight: 500;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+#auth-login-card form button[type="submit"]:hover {
+    background-color: var(--cbo-red-hover) !important;
+}
+
+/* -------------------------------------------------------------
+ * 3. Splash Screen Enhancements
+ * ------------------------------------------------------------- */
+#splash-screen {
+    background: #ffffff;
+}
+
+.dark #splash-screen {
+    background: #0f141c;
+}
+
+#splash-screen #logo,
+#splash-screen #logo-her {
+    filter: drop-shadow(0 6px 18px rgba(109, 77, 21, 0.12));
+}
+
+.dark #splash-screen #logo,
+.dark #splash-screen #logo-her {
+    filter: drop-shadow(0 6px 20px rgba(0, 0, 0, 0.5));
+}
+
+/* -------------------------------------------------------------
+ * 4. Sidebar & App Navigation Accents
+ * ------------------------------------------------------------- */
+button[aria-label="Home"] img {
+    padding: 2px;
+}
