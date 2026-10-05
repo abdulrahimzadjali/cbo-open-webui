@@ -1,5 +1,9 @@
 FROM ghcr.io/open-webui/open-webui:main
 
+LABEL org.opencontainers.image.source="https://github.com/abdulrahimzadjali/cbo-open-webui"
+LABEL org.opencontainers.image.description="CBO AI - Central Bank of Oman Custom Open WebUI"
+LABEL org.opencontainers.image.title="CBO AI"
+
 # Copy CBO brand master assets
 COPY static/cbo/ /app/build/cbo/
 COPY static/cbo/ /app/build/static/cbo/
