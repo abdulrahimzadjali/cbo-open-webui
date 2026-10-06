@@ -32,28 +32,30 @@
     position: relative;
     background-color: #faf7f2;
     background-image:
+        radial-gradient(ellipse at top left, rgba(210, 191, 150, 0.28), transparent 60%),
         radial-gradient(ellipse at bottom right, rgba(210, 191, 150, 0.35), transparent 65%),
-        linear-gradient(to bottom, rgba(250, 247, 242, 0.88) 0%, rgba(250, 247, 242, 0.72) 100%),
-        url('/static/cbo/cbo-building-hero.png');
-    background-repeat: no-repeat;
-    background-position: center bottom, center, center bottom;
-    background-size: cover, cover, contain;
+        linear-gradient(to bottom, rgba(250, 247, 242, 0.70) 0%, rgba(250, 247, 242, 0.85) 100%),
+        url('/static/cbo/cbo-watermark-tile-light.png');
+    background-repeat: no-repeat, no-repeat, no-repeat, repeat;
+    background-position: top left, bottom right, center, center;
+    background-size: cover, cover, cover, 64px 64px;
 }
 
 .dark #auth-page {
     background-color: #0c1017;
     background-image:
-        radial-gradient(ellipse at bottom right, rgba(210, 191, 150, 0.15), transparent 65%),
-        linear-gradient(to bottom, rgba(12, 16, 23, 0.92) 0%, rgba(12, 16, 23, 0.80) 100%),
-        url('/static/cbo/cbo-building-hero.png');
-    background-repeat: no-repeat;
-    background-position: center bottom, center, center bottom;
-    background-size: cover, cover, contain;
+        radial-gradient(ellipse at top left, rgba(210, 191, 150, 0.12), transparent 60%),
+        radial-gradient(ellipse at bottom right, rgba(210, 191, 150, 0.18), transparent 65%),
+        linear-gradient(to bottom, rgba(12, 16, 23, 0.80) 0%, rgba(12, 16, 23, 0.90) 100%),
+        url('/static/cbo/cbo-watermark-tile-dark.png');
+    background-repeat: no-repeat, no-repeat, no-repeat, repeat;
+    background-position: top left, bottom right, center, center;
+    background-size: cover, cover, cover, 64px 64px;
 }
 
-/* Allow the majestic building backdrop to show through the default background overlay */
+/* Allow the subtle watermark backdrop to show through the default background overlay */
 #auth-page > div.absolute.top-0.left-0 {
-    opacity: 0.1 !important;
+    opacity: 0.05 !important;
 }
 
 /* Elevated CBO Glassmorphism Card for Sign-in */
@@ -149,3 +151,30 @@
 button[aria-label="Home"] img {
     padding: 2px;
 }
+
+/* -------------------------------------------------------------
+ * 5. Main Chat Workspace Watermark & Reading Vignette
+ * ------------------------------------------------------------- */
+#chat-pane {
+    position: relative;
+    background-color: #ffffff;
+    background-image:
+        radial-gradient(ellipse at center, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.82) 55%, rgba(255, 255, 255, 0.55) 100%),
+        url('/static/cbo/cbo-watermark-tile-light.png');
+    background-repeat: no-repeat, repeat;
+    background-position: center center, center center;
+    background-size: cover, 64px 64px;
+    background-attachment: local, local;
+}
+
+.dark #chat-pane {
+    background-color: #111827;
+    background-image:
+        radial-gradient(ellipse at center, rgba(17, 24, 39, 0.96) 0%, rgba(17, 24, 39, 0.84) 55%, rgba(17, 24, 39, 0.60) 100%),
+        url('/static/cbo/cbo-watermark-tile-dark.png');
+    background-repeat: no-repeat, repeat;
+    background-position: center center, center center;
+    background-size: cover, 64px 64px;
+    background-attachment: local, local;
+}
+

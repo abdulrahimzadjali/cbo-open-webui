@@ -19,13 +19,20 @@ CBO_DIR = os.path.join(STATIC_DIR, "cbo")
 os.makedirs(CBO_DIR, exist_ok=True)
 os.makedirs(STATIC_STATIC_DIR, exist_ok=True)
 
-# 1. Copy source assets to static/cbo/
-shutil.copyfile(SEAL_SRC, os.path.join(CBO_DIR, "cbo-seal.png"))
-shutil.copyfile(MOTIF_SRC, os.path.join(CBO_DIR, "cbo-motif.png"))
-shutil.copyfile(BUILDING_SRC, os.path.join(CBO_DIR, "cbo-building-hero.png"))
-shutil.copyfile(LOGO_HORIZ_SRC, os.path.join(CBO_DIR, "cbo-logo-horizontal.png"))
-shutil.copyfile(LOGO_HORIZ_RTL_SRC, os.path.join(CBO_DIR, "cbo-logo-horizontal-rtl.png"))
-print("Copied primary CBO assets to static/cbo/")
+# 1. Copy source assets to static/cbo/ (if source directory exists)
+if os.path.exists(BRAIN_UPLOADS):
+    shutil.copyfile(SEAL_SRC, os.path.join(CBO_DIR, "cbo-seal.png"))
+    shutil.copyfile(MOTIF_SRC, os.path.join(CBO_DIR, "cbo-motif.png"))
+    shutil.copyfile(BUILDING_SRC, os.path.join(CBO_DIR, "cbo-building-hero.png"))
+    shutil.copyfile(LOGO_HORIZ_SRC, os.path.join(CBO_DIR, "cbo-logo-horizontal.png"))
+    shutil.copyfile(LOGO_HORIZ_RTL_SRC, os.path.join(CBO_DIR, "cbo-logo-horizontal-rtl.png"))
+    print("Copied primary CBO assets to static/cbo/")
+else:
+    print("Source upload directory not found, using existing assets in static/cbo/")
+
+# Fallback to local files if brain uploads path is not present
+SEAL_SRC = os.path.join(CBO_DIR, "cbo-seal.png") if not os.path.exists(SEAL_SRC) else SEAL_SRC
+MOTIF_SRC = os.path.join(CBO_DIR, "cbo-motif.png") if not os.path.exists(MOTIF_SRC) else MOTIF_SRC
 
 def create_fitted_square(img_path, target_size, padding_ratio=0.06):
     """Resizes image keeping aspect ratio and centers it on transparent square canvas."""
@@ -76,3 +83,72 @@ svg_content = f'''<svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xl
 with open(os.path.join(STATIC_STATIC_DIR, "favicon.svg"), "w", encoding="utf-8") as f:
     f.write(svg_content)
 print("Generated favicon.svg")
+
+# 5. Generate Seamless Repeating Watermark Pattern Tiles
+def generate_watermark_tiles():
+    import numpy as np
+
+    motif_file = MOTIF_SRC
+    im = Image.open(motif_file).convert("RGBA")
+    arr = np.array(im, dtype=np.float32)
+
+    alpha = arr[:, :, 3]
+    is_colored = alpha > 50
+
+    # Red region: where R > 150 and G < 100
+    is_red = is_colored & (arr[:, :, 0] > 150) & (arr[:, :, 1] < 100)
+    # Gold region: outer diamond border
+    is_gold = is_colored & (~is_red)
+
+    def create_monochrome_motif(color_gold, color_red, alpha_mult=1.0):
+        new_arr = np.zeros_like(arr)
+        new_arr[is_gold, 0] = color_gold[0]
+        new_arr[is_gold, 1] = color_gold[1]
+        new_arr[is_gold, 2] = color_gold[2]
+        new_arr[is_gold, 3] = arr[is_gold, 3] * alpha_mult
+
+        new_arr[is_red, 0] = color_red[0]
+        new_arr[is_red, 1] = color_red[1]
+        new_arr[is_red, 2] = color_red[2]
+        new_arr[is_red, 3] = arr[is_red, 3] * alpha_mult
+        return Image.fromarray(np.uint8(np.clip(new_arr, 0, 255)))
+
+    def create_seamless_tile(motif_img, tile_size=240, motif_size=108):
+        m = motif_img.copy()
+        m.thumbnail((motif_size, motif_size), Image.Resampling.LANCZOS)
+        mw, mh = m.size
+
+        tile = Image.new("RGBA", (tile_size, tile_size), (0, 0, 0, 0))
+
+        # Center motif
+        cx = (tile_size - mw) // 2
+        cy = (tile_size - mh) // 2
+        tile.paste(m, (cx, cy), m)
+
+        # 4 corners (quincunx / staggered pattern)
+        corners = [
+            (-mw // 2, -mh // 2),
+            (tile_size - mw // 2, -mh // 2),
+            (-mw // 2, tile_size - mh // 2),
+            (tile_size - mw // 2, tile_size - mh // 2)
+        ]
+        for ox, oy in corners:
+            tile.paste(m, (ox, oy), m)
+
+        return tile
+
+    # Light mode tile: Warm gold / bronze tones
+    m_light = create_monochrome_motif((191, 165, 118), (159, 132, 82), alpha_mult=0.15)
+    tile_light = create_seamless_tile(m_light, tile_size=240, motif_size=108)
+    tile_light.save(os.path.join(CBO_DIR, "cbo-watermark-tile-light.png"), "PNG")
+    tile_light.save(os.path.join(STATIC_STATIC_DIR, "cbo-watermark-tile-light.png"), "PNG")
+
+    # Dark mode tile: Luminous champagne gold tones
+    m_dark = create_monochrome_motif((223, 207, 173), (200, 180, 140), alpha_mult=0.18)
+    tile_dark = create_seamless_tile(m_dark, tile_size=240, motif_size=108)
+    tile_dark.save(os.path.join(CBO_DIR, "cbo-watermark-tile-dark.png"), "PNG")
+    tile_dark.save(os.path.join(STATIC_STATIC_DIR, "cbo-watermark-tile-dark.png"), "PNG")
+
+    print("Generated seamless watermark pattern tiles (light & dark)")
+
+generate_watermark_tiles()

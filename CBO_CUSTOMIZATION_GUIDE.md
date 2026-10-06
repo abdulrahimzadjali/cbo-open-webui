@@ -22,6 +22,8 @@ This project is structured specifically to allow continuous updates from the ups
 | `static/static/splash.png` | Derived from Diamond Motif | Loading splash screen |
 | `static/static/splash-dark.png`| Derived from Diamond Motif | Dark mode loading splash screen |
 | `static/static/logo.png` | Derived from Diamond Motif | App logo |
+| `static/cbo/cbo-watermark-tile-light.png` | Derived from Diamond Motif | Seamless repeating watermark pattern (Light mode) |
+| `static/cbo/cbo-watermark-tile-dark.png` | Derived from Diamond Motif | Seamless repeating watermark pattern (Dark mode) |
 | `static/static/custom.css` | CBO Stylesheet | Zero-conflict CSS injection for theme & layout |
 
 To regenerate all derived icons from the master assets at any time:
