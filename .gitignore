@@ -315,3 +315,6 @@ cypress/screenshots
 # Docker image exports
 docker-exports/
 *.tar
+*.tar.gz
+*.sha256
+

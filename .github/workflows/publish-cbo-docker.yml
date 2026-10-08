@@ -19,7 +19,7 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
@@ -57,3 +57,72 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Export and Compress Docker Image
+        run: |
+          IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          echo "Pulling freshly published image: $IMAGE_TAG..."
+          docker pull "$IMAGE_TAG"
+
+          echo "Installing pigz for multi-core accelerated compression..."
+          sudo apt-get update && sudo apt-get install -y pigz
+
+          echo "Exporting image and compressing with pigz into cbo-open-webui-latest.tar.gz..."
+          docker save "$IMAGE_TAG" | pigz > cbo-open-webui-latest.tar.gz
+
+          echo "Calculating SHA-256 checksum..."
+          sha256sum cbo-open-webui-latest.tar.gz > cbo-open-webui-latest.tar.gz.sha256
+
+          echo "Export completed successfully. Artifact details:"
+          ls -lh cbo-open-webui-latest.tar.gz*
+
+      - name: Publish or Update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="cbo-latest"
+          TITLE="CBO AI Docker Image (Latest Release)"
+
+          cat << 'EOF' > /tmp/release-notes.md
+          ### CBO AI Container Image Archive
+          Direct download of the official CBO AI Docker image for offline, air-gapped, or direct-import environments.
+
+          - **Registry Image**: `ghcr.io/${{ github.repository }}:latest`
+          - **Archive File**: `cbo-open-webui-latest.tar.gz`
+
+          #### Direct Download Links:
+          - **Image Archive**: [cbo-open-webui-latest.tar.gz](https://github.com/${{ github.repository }}/releases/download/cbo-latest/cbo-open-webui-latest.tar.gz)
+          - **SHA-256 Checksum**: [cbo-open-webui-latest.tar.gz.sha256](https://github.com/${{ github.repository }}/releases/download/cbo-latest/cbo-open-webui-latest.tar.gz.sha256)
+
+          #### How to Load and Run Locally:
+          ```bash
+          # 1. Download archive and checksum
+          curl -L -O https://github.com/${{ github.repository }}/releases/download/cbo-latest/cbo-open-webui-latest.tar.gz
+          curl -L -O https://github.com/${{ github.repository }}/releases/download/cbo-latest/cbo-open-webui-latest.tar.gz.sha256
+
+          # 2. Verify checksum integrity
+          sha256sum -c cbo-open-webui-latest.tar.gz.sha256
+
+          # 3. Load image into Docker
+          docker load -i cbo-open-webui-latest.tar.gz
+
+          # 4. Run the CBO AI container
+          docker run -d -p 3000:8080 \
+            -v open-webui:/app/backend/data \
+            --name cbo-open-webui \
+            ghcr.io/${{ github.repository }}:latest
+          ```
+          EOF
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release '$TAG' exists. Updating assets and release notes..."
+            gh release upload "$TAG" cbo-open-webui-latest.tar.gz cbo-open-webui-latest.tar.gz.sha256 --clobber
+            gh release edit "$TAG" --title "$TITLE" --notes-file /tmp/release-notes.md
+          else
+            echo "Release '$TAG' does not exist. Creating rolling release '$TAG'..."
+            gh release create "$TAG" cbo-open-webui-latest.tar.gz cbo-open-webui-latest.tar.gz.sha256 \
+              --target "${{ github.sha }}" \
+              --title "$TITLE" \
+              --notes-file /tmp/release-notes.md
+          fi
+          echo "GitHub Release $TAG published successfully."
