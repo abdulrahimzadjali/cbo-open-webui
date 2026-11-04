@@ -72,7 +72,7 @@
 		}
 	};
 
-	const sortState = (key) =>
+	const sortState = (key, orderBy, direction) =>
 		orderBy === key ? (direction === 'asc' ? 'ascending' : 'descending') : 'none';
 
 	const setSortKey = (key) => {
@@ -197,7 +197,7 @@
 				{#if query}
 					<div class="self-center pl-1.5 translate-y-[0.5px] rounded-l-xl bg-transparent">
 						<button
-							class="p-0.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+							class="py-0.5 rounded-full transition hover:text-gray-900 dark:hover:text-gray-100 text-gray-500 dark:text-gray-400 px-0"
 							aria-label={$i18n.t('Clear search')}
 							on:click={() => {
 								query = '';
@@ -225,7 +225,11 @@
 		<table class="w-full text-sm text-left text-gray-500 dark:text-gray-400 table-auto max-w-full">
 			<thead class="text-xs text-gray-800 uppercase bg-transparent dark:text-gray-200">
 				<tr class=" border-b-[1.5px] border-gray-50 dark:border-gray-850/30">
-					<th scope="col" class="font-normal select-none" aria-sort={sortState('name')}>
+					<th
+						scope="col"
+						class="font-normal select-none"
+						aria-sort={sortState('name', orderBy, direction)}
+					>
 						<button
 							type="button"
 							class="flex w-full gap-1.5 items-center px-2.5 py-1.5"
@@ -248,7 +252,11 @@
 							{/if}
 						</button>
 					</th>
-					<th scope="col" class="font-normal select-none" aria-sort={sortState('role')}>
+					<th
+						scope="col"
+						class="font-normal select-none"
+						aria-sort={sortState('role', orderBy, direction)}
+					>
 						<button
 							type="button"
 							class="flex w-full gap-1.5 items-center px-2.5 py-1.5"
@@ -271,7 +279,11 @@
 							{/if}
 						</button>
 					</th>
-					<th scope="col" class="font-normal select-none" aria-sort={sortState('email')}>
+					<th
+						scope="col"
+						class="font-normal select-none"
+						aria-sort={sortState('email', orderBy, direction)}
+					>
 						<button
 							type="button"
 							class="flex w-full gap-1.5 items-center px-2.5 py-1.5"
@@ -295,7 +307,11 @@
 						</button>
 					</th>
 
-					<th scope="col" class="font-normal select-none" aria-sort={sortState('last_active_at')}>
+					<th
+						scope="col"
+						class="font-normal select-none"
+						aria-sort={sortState('last_active_at', orderBy, direction)}
+					>
 						<button
 							type="button"
 							class="flex w-full gap-1.5 items-center px-2.5 py-1.5"
@@ -319,7 +335,11 @@
 							{/if}
 						</button>
 					</th>
-					<th scope="col" class="font-normal select-none" aria-sort={sortState('created_at')}>
+					<th
+						scope="col"
+						class="font-normal select-none"
+						aria-sort={sortState('created_at', orderBy, direction)}
+					>
 						<button
 							type="button"
 							class="flex w-full gap-1.5 items-center px-2.5 py-1.5"
@@ -342,7 +362,9 @@
 						</button>
 					</th>
 
-					<th scope="col" class="px-2.5 py-1.5 font-normal text-right"></th>
+					<th scope="col" class="px-2.5 py-1.5 font-normal text-right"
+						><span class="sr-only">{$i18n.t('Actions')}</span></th
+					>
 				</tr>
 			</thead>
 			<tbody class="">
@@ -381,23 +403,34 @@
 						<td class="px-3 py-1 min-w-[5rem] w-20">
 							<button
 								class="text-xs font-normal leading-4 capitalize transition {roleClass(user.role)}"
-								aria-label={$i18n.t('Change User Role')}
 								on:click={() => {
 									selectedUser = user;
 									showEditUserModal = !showEditUserModal;
 								}}
 							>
+								<span class="sr-only">{$i18n.t('Change User Role')}</span>
 								{$i18n.t(user.role)}
 							</button>
 						</td>
 						<td class=" px-3 py-1 max-w-48 truncate"> {user.email} </td>
 
 						<td class=" px-3 py-1">
-							{dayjs(user.last_active_at * 1000).fromNow()}
+							<Tooltip
+								content={new Date(user.last_active_at * 1000).toLocaleString($i18n.language, {
+									dateStyle: 'medium',
+									timeStyle: 'long'
+								})}
+							>
+								{dayjs(user.last_active_at * 1000)
+									.locale($i18n.language)
+									.fromNow()}
+							</Tooltip>
 						</td>
 
 						<td class=" px-3 py-1">
-							{dayjs(user.created_at * 1000).format('LL')}
+							{dayjs(user.created_at * 1000)
+								.locale($i18n.language)
+								.format('LL')}
 						</td>
 
 						<td class="px-3 py-1 text-right">

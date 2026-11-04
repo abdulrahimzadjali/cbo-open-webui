@@ -13,6 +13,7 @@
 	import CheckCircle from '$lib/components/icons/CheckCircle.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
 	import FullHeightIframe from '$lib/components/common/FullHeightIframe.svelte';
+	import MCPApp, { type MCPAppEmbed } from '$lib/components/chat/Messages/MCPApp.svelte';
 
 	import { settings } from '$lib/stores';
 
@@ -99,14 +100,18 @@
 	$: pendingToolTokens = tokens.filter(
 		(t) => t?.attributes?.type === 'tool_calls' && t?.attributes?.status === 'pending'
 	);
-	$: hasActiveToolCalls = tokens.some(
-		(t) =>
-			t?.attributes?.type === 'tool_calls' &&
-			t?.attributes?.status !== 'rejected' &&
-			t?.attributes?.status !== 'failed' &&
-			t?.attributes?.status !== 'incomplete' &&
-			t?.attributes?.done !== 'true'
-	);
+	$: hasActiveDetails = tokens.some((token) => {
+		const attributes = token?.attributes;
+		if (attributes?.type === 'tool_calls') {
+			return (
+				attributes.status !== 'rejected' &&
+				attributes.status !== 'failed' &&
+				attributes.status !== 'incomplete' &&
+				attributes.done !== 'true'
+			);
+		}
+		return !messageDone && attributes?.done && attributes.done !== 'true';
+	});
 	$: hasRejected = tokens.some(
 		(t) => t?.attributes?.type === 'tool_calls' && t?.attributes?.status === 'rejected'
 	);
@@ -123,7 +128,7 @@
 	$: allEmbeds = (() => {
 		if (!allowEmbeds) return [];
 
-		const result: Array<{ name: string; embed: string; args: string }> = [];
+		const result: Array<{ name: string; embed: string | MCPAppEmbed; args: string }> = [];
 		for (const t of tokens) {
 			if (t?.attributes?.type !== 'tool_calls') continue;
 			const raw = decode(t.attributes?.embeds ?? '');
@@ -174,7 +179,7 @@
 		return detail;
 	})();
 
-	$: prefixText = hasActiveToolCalls ? $i18n.t('Exploring') : $i18n.t('Explored');
+	$: prefixText = hasActiveDetails ? $i18n.t('Exploring') : $i18n.t('Explored');
 </script>
 
 <div {id} class="w-full min-w-0">
@@ -199,7 +204,7 @@
 		>
 			<div class="flex items-center gap-1.5 min-w-0">
 				<!-- Status icon -->
-				{#if hasActiveToolCalls}
+				{#if hasActiveDetails}
 					<div>
 						<Spinner className="size-4" />
 					</div>
@@ -223,7 +228,7 @@
 
 				<!-- Summary text -->
 				<div class="flex-1 line-clamp-1">
-					<span class="text-gray-600 dark:text-gray-300 {hasActiveToolCalls ? 'shimmer' : ''}"
+					<span class="text-gray-600 dark:text-gray-300 {hasActiveDetails ? 'shimmer' : ''}"
 						>{prefixText}</span
 					>
 					{#if summaryText}
@@ -309,14 +314,18 @@
 	{#if allEmbeds.length > 0}
 		{#each allEmbeds as embedItem, idx}
 			<div id={`${id}-embed-${idx}`}>
-				<FullHeightIframe
-					src={embedItem.embed}
-					args={embedItem.args}
-					allowScripts={true}
-					allowForms={$settings?.iframeSandboxAllowForms ?? false}
-					allowSameOrigin={$settings?.iframeSandboxAllowSameOrigin ?? false}
-					allowPopups={true}
-				/>
+				{#if typeof embedItem.embed === 'object' && embedItem.embed?.type === 'mcp_app'}
+					{#key embedItem.embed}<MCPApp app={embedItem.embed} />{/key}
+				{:else if typeof embedItem.embed === 'string'}
+					<FullHeightIframe
+						src={embedItem.embed}
+						args={embedItem.args}
+						allowScripts={true}
+						allowForms={$settings?.iframeSandboxAllowForms ?? false}
+						allowSameOrigin={$settings?.iframeSandboxAllowSameOrigin ?? false}
+						allowPopups={true}
+					/>
+				{/if}
 			</div>
 		{/each}
 	{/if}

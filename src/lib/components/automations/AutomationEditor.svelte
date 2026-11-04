@@ -1,7 +1,10 @@
 <script lang="ts">
-	import { onMount, getContext } from 'svelte';
+	import { formatSchedule } from '$lib/utils/schedule';
+	import { onMount, onDestroy, getContext, tick } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
+	import { WEBUI_API_BASE_URL } from '$lib/constants';
 
 	import dayjs from 'dayjs';
 	import localizedFormat from 'dayjs/plugin/localizedFormat';
@@ -41,6 +44,38 @@
 	let showEditModal = false;
 
 	let runs: AutomationRunModel[] = [];
+	let linkedRun: AutomationRunModel | null = null;
+	$: visibleRuns =
+		linkedRun && !runs.some((run) => run.id === linkedRun?.id)
+			? [...runs, linkedRun].sort((a, b) => b.created_at - a.created_at)
+			: runs;
+	let linkedRunId = '';
+	let alive = true;
+	onDestroy(() => {
+		alive = false;
+	});
+	$: if (($page.url.searchParams.get('run') ?? '') !== linkedRunId) {
+		linkedRunId = $page.url.searchParams.get('run') ?? '';
+		void revealRun(linkedRunId);
+	}
+	async function revealRun(id: string) {
+		linkedRun = null;
+		if (!id) return;
+		try {
+			const response = await fetch(
+				`${WEBUI_API_BASE_URL}/automations/${encodeURIComponent(automation.id)}/runs/${encodeURIComponent(id)}`,
+				{ headers: { Authorization: `Bearer ${localStorage.token}` } }
+			);
+			if (!response.ok) throw new Error($i18n.t('Run not found'));
+			const run = await response.json();
+			if (!alive || linkedRunId !== id) return;
+			linkedRun = run;
+			await tick();
+			document.getElementById('inbox-automation-run')?.scrollIntoView({ block: 'center' });
+		} catch (error) {
+			if (alive && linkedRunId === id) toast.error(String(error));
+		}
+	}
 	let runsLoading = false;
 	let hasMoreRuns = true;
 	let runsPage = 0;
@@ -79,7 +114,7 @@
 
 	const formatTime = (ts: number | null): string => {
 		if (!ts) return '-';
-		return new Date(ts / 1_000_000).toLocaleString(undefined, {
+		return new Date(ts / 1_000_000).toLocaleString($i18n.language, {
 			month: 'short',
 			day: 'numeric',
 			hour: '2-digit',
@@ -89,61 +124,10 @@
 
 	const formatNextRun = (ts: number | null): string => {
 		if (!ts) return $i18n.t('Not scheduled');
-		const d = dayjs(ts / 1_000_000);
-		if (d.isSame(dayjs(), 'day')) return `${$i18n.t('Today at')} ${d.format('LT')}`;
+		const d = dayjs(ts / 1_000_000).locale($i18n.language);
+		if (d.isSame(dayjs().locale($i18n.language), 'day'))
+			return `${$i18n.t('Today at')} ${d.format('LT')}`;
 		return d.format('L LT');
-	};
-
-	const formatSchedule = (rrule: string): string => {
-		const match = rrule.match(/DTSTART[^:]*:(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})/i);
-		if (/COUNT=1(?!\d)/.test(rrule)) {
-			if (match) {
-				const d = new Date(`${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}`);
-				return `${$i18n.t('Once')} · ${d.toLocaleDateString(undefined, {
-					month: 'short',
-					day: 'numeric'
-				})} ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
-			}
-			return $i18n.t('Once');
-		}
-
-		const parts: Record<string, string> = {};
-		rrule
-			.split(/\s+/)
-			.filter((line) => !line.toUpperCase().startsWith('DTSTART'))
-			.join('')
-			.replace('RRULE:', '')
-			.split(';')
-			.forEach((part) => {
-				const [key, value] = part.split('=');
-				if (key && value) parts[key] = value;
-			});
-
-		const freq = parts.FREQ || '';
-		const hour = parseInt(parts.BYHOUR || match?.[4] || '0');
-		const minute = (parts.BYMINUTE || match?.[5] || '0').padStart(2, '0');
-		const interval = parseInt(parts.INTERVAL || '1');
-		const ampm = hour >= 12 ? 'PM' : 'AM';
-		const hour12 = hour % 12 || 12;
-		const time = `${hour12}:${minute} ${ampm}`;
-
-		if (freq === 'MINUTELY')
-			return interval === 1
-				? $i18n.t('Every minute')
-				: $i18n.t('Every {{count}} minutes', { count: interval });
-		if (freq === 'HOURLY')
-			return interval === 1
-				? $i18n.t('Hourly')
-				: $i18n.t('Every {{count}} hours', { count: interval });
-		if (freq === 'DAILY') return `${$i18n.t('Daily at')} ${time}`;
-		if (freq === 'WEEKLY')
-			return parts.BYDAY
-				? `${parts.BYDAY} ${$i18n.t('at')} ${time}`
-				: `${$i18n.t('Weekly at')} ${time}`;
-		if (freq === 'MONTHLY')
-			return `${$i18n.t('Monthly')} ${parts.BYMONTHDAY ?? '1'} ${$i18n.t('at')} ${time}`;
-
-		return rrule;
 	};
 
 	const toggleHandler = async () => {
@@ -167,6 +151,7 @@
 			return null;
 		});
 		if (res) {
+			automation = res;
 			toast.success($i18n.t('Automation triggered'));
 			setTimeout(() => loadRuns(false), 2000);
 		}
@@ -301,7 +286,7 @@
 				{$i18n.t('Schedule')}
 			</span>
 			<span class="min-w-0 truncate text-xs text-gray-700 dark:text-gray-300">
-				{formatSchedule(automation.data.rrule)}
+				{formatSchedule(automation.data.rrule, $i18n)}
 			</span>
 		</div>
 
@@ -358,18 +343,21 @@
 	<div class="px-4 py-2">
 		<div class="mb-1 text-[0.6875rem] text-gray-400 dark:text-gray-500">{$i18n.t('Runs')}</div>
 		<div class="overflow-y-auto scrollbar-hidden" on:scroll={onScroll}>
-			{#if runsLoading && runs.length === 0}
+			{#if runsLoading && visibleRuns.length === 0}
 				<div class="flex justify-center py-8">
 					<Spinner className="size-4" />
 				</div>
-			{:else if runs.length === 0}
+			{:else if visibleRuns.length === 0}
 				<div class="py-2 text-[0.6875rem] text-gray-400 dark:text-gray-600">
 					{$i18n.t('No runs yet')}
 				</div>
 			{:else}
 				<div>
-					{#each runs as run}
-						<div class="flex h-7 items-center gap-2 text-xs">
+					{#each visibleRuns as run}
+						<div
+							id={run.id === linkedRun?.id ? 'inbox-automation-run' : undefined}
+							class="flex h-7 items-center gap-2 text-xs"
+						>
 							<span
 								class="h-1.5 w-1.5 shrink-0 rounded-full {run.status === 'success'
 									? 'bg-emerald-500'

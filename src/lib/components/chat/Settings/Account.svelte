@@ -14,6 +14,7 @@
 	import { getUserVariables, updateUserVariables } from '$lib/apis/users';
 
 	import UpdatePassword from './Account/UpdatePassword.svelte';
+	import Mfa from './Account/Mfa.svelte';
 	import { generateInitialsImage } from '$lib/utils';
 	import { copyToClipboard } from '$lib/utils';
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
@@ -384,11 +385,17 @@
 			</UserSettingSection>
 		{/if}
 
+		<Mfa />
+
 		{#if canUseApiKeys({ user: $user, config: $config })}
 			<UserSettingSection title={$i18n.t('settings.personal.account.sections.apiKeys.title')}>
-				<UserSettingRow description={$i18n.t('settings.personal.account.secrets.description')}>
+				<UserSettingRow
+					let:labelId
+					description={$i18n.t('settings.personal.account.secrets.description')}
+				>
 					<span slot="label">{$i18n.t('settings.personal.account.secrets.label')}</span>
 					<button
+						id={`${labelId}-control`}
 						class={actionButtonClass}
 						type="button"
 						on:click={() => {
@@ -405,9 +412,15 @@
 								description={$i18n.t('settings.personal.account.jwtToken.description')}
 							>
 								<div class="flex">
-									<SensitiveInput variant="settings" value={localStorage.token} readOnly={true} />
+									<SensitiveInput
+										variant="settings"
+										placeholder={$i18n.t('settings.personal.account.jwtToken.label')}
+										value={localStorage.token}
+										readOnly={true}
+									/>
 
 									<button
+										type="button"
 										class="ml-1.5 rounded-sm px-1.5 py-1 text-gray-500 transition hover:text-gray-700 dark:hover:text-gray-300"
 										aria-label={$i18n.t('Copy Token')}
 										on:click={() => {
@@ -462,9 +475,15 @@
 							>
 								<div class="flex">
 									{#if APIKey}
-										<SensitiveInput variant="settings" value={APIKey} readOnly={true} />
+										<SensitiveInput
+											variant="settings"
+											placeholder={$i18n.t('settings.personal.account.apiKey.label')}
+											value={APIKey}
+											readOnly={true}
+										/>
 
 										<button
+											type="button"
 											class="ml-1.5 rounded-sm px-1.5 py-1 text-gray-500 transition hover:text-gray-700 dark:hover:text-gray-300"
 											aria-label={$i18n.t('Copy API Key')}
 											on:click={() => {
@@ -572,7 +591,7 @@
 
 	<div class="shrink-0 flex w-full justify-end pt-3 text-sm font-normal">
 		<button
-			class="px-3.5 py-1.5 text-sm font-normal bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full"
+			class="flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-2.5 text-xs font-normal text-white transition hover:bg-black disabled:opacity-60 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
 			type="submit"
 		>
 			{$i18n.t('Save')}
@@ -591,7 +610,13 @@
 	</div>
 </ConfirmDialog>
 
-<Modal size="sm" bind:show={variableModalOpen}>
+<Modal
+	ariaLabel={variableFormIndex === null
+		? $i18n.t('Add User Variable')
+		: $i18n.t('Edit User Variable')}
+	size="sm"
+	bind:show={variableModalOpen}
+>
 	<form class="p-4" on:submit|preventDefault={saveVariableForm}>
 		<h2 class="mb-3 text-sm font-medium text-gray-900 dark:text-white">
 			{variableFormIndex === null ? $i18n.t('Add User Variable') : $i18n.t('Edit User Variable')}
@@ -646,7 +671,7 @@
 					{$i18n.t('Cancel')}
 				</button>
 				<button
-					class="rounded-full bg-black px-3.5 py-1.5 text-sm font-normal text-white transition hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-gray-100"
+					class="flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-2.5 text-xs font-normal text-white transition hover:bg-black disabled:opacity-60 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
 					type="submit"
 				>
 					{$i18n.t('Done')}

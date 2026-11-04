@@ -12,9 +12,11 @@ from open_webui.config import UPLOAD_DIR
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.events import EVENTS, publish_event
 from open_webui.internal.db import get_async_session
+from open_webui.models.access_grants import AccessGrants
+from open_webui.models.automations import Automations
 from open_webui.models.chat_messages import ChatMessages
-from open_webui.models.config import Config
 from open_webui.models.chats import Chats
+from open_webui.models.config import Config
 from open_webui.models.folders import (
     FolderForm,
     FolderModel,
@@ -22,17 +24,16 @@ from open_webui.models.folders import (
     Folders,
     FolderUpdateForm,
 )
-from open_webui.models.access_grants import AccessGrants
-from open_webui.models.automations import Automations
 from open_webui.models.groups import Groups
+from open_webui.models.shared_chats import ChatShareMode
 from open_webui.models.users import Users
-from open_webui.utils.access_control import has_permission
+from open_webui.tasks import has_active_tasks
 from open_webui.utils.access_control import (
-    filter_allowed_access_grants,
+    has_permission,
+    validate_access_grants,
 )
 from open_webui.utils.access_control.files import can_read_all_folder_files, get_accessible_folder_files
 from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.tasks import has_active_tasks
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -83,9 +84,7 @@ async def check_folders_permission(request: Request, user, db=None):
         )
 
 
-############################
 # Get Folders
-############################
 
 
 @router.get('/', response_model=list[FolderNameIdResponse])
@@ -109,7 +108,9 @@ async def get_folders(
 
     user_group_ids = None
     if user.role != 'admin' and any(folder.data and 'files' in folder.data for folder in folders):
-        user_group_ids = {group.id for group in await Groups.get_groups_by_member_id(user.id, db=db)}
+        user_group_ids = {
+            group.id for group in await Groups.get_groups_by_member_id(user.id, db=db, include_inherited=True)
+        }
 
     # Verify folder data integrity
     folder_list = []
@@ -139,9 +140,7 @@ async def get_folders(
     ]
 
 
-############################
 # Create Folder
-############################
 
 
 @router.post('/')
@@ -160,6 +159,16 @@ async def create_folder(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ERROR_MESSAGES.DEFAULT('Folder already exists'),
+        )
+
+    if (
+        form_data.data
+        and 'files' in form_data.data
+        and not await can_read_all_folder_files(form_data.data['files'], user, db=db)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
 
     # Check if creating a subfolder in a shared folder
@@ -202,16 +211,6 @@ async def create_folder(
                     detail=ERROR_MESSAGES.DEFAULT('Error creating folder'),
                 )
 
-    if (
-        form_data.data
-        and 'files' in form_data.data
-        and not await can_read_all_folder_files(form_data.data['files'], user, db=db)
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
-        )
-
     try:
         folder = await Folders.insert_new_folder(user.id, form_data, form_data.parent_id, db=db)
         await publish_event(
@@ -231,9 +230,7 @@ async def create_folder(
         )
 
 
-############################
 # Get Shared Folders
-############################
 
 
 @router.get('/shared')
@@ -242,15 +239,14 @@ async def get_shared_folders(
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    """Get all folders shared with the current user (not owned by them)."""
+    """Get folders shared with or by the current user."""
     await check_folders_permission(request, user, db=db)
-    groups = await Groups.get_groups_by_member_id(user.id, db=db)
+    groups = await Groups.get_groups_by_member_id(user.id, db=db, include_inherited=True)
     group_ids = {g.id for g in groups}
 
     folder_perms = await Folders.get_shared_folder_ids_for_user(user.id, group_ids, db=db)
 
-    folders = await Folders.get_folders_by_ids(list(folder_perms.keys()), db=db)
-    shared_folders = [folder for folder in folders if folder.user_id != user.id]
+    shared_folders = await Folders.get_folders_by_ids(list(folder_perms.keys()), db=db)
 
     owners = await Users.get_users_by_user_ids([folder.user_id for folder in shared_folders], db=db)
     owner_names = {owner.id: owner.name for owner in owners}
@@ -259,32 +255,33 @@ async def get_shared_folders(
         {
             **folder.model_dump(),
             'owner_name': owner_names.get(folder.user_id, 'Unknown'),
-            'permission': folder_perms[folder.id],
+            'permission': 'write' if folder.user_id == user.id else folder_perms[folder.id],
         }
         for folder in shared_folders
     ]
 
     # Also include child folders of shared folders (inheritance)
-    seen_ids = {folder.id for folder in shared_folders}
+    result_by_id = {folder['id']: folder for folder in results}
     for folder in shared_folders:
         children = await Folders.get_children_folders_by_id_and_user_id(folder.id, folder.user_id, db=db)
         for child in children or []:
-            if child.id not in seen_ids:
-                seen_ids.add(child.id)
-                results.append(
-                    {
-                        **child.model_dump(),
-                        'owner_name': owner_names.get(child.user_id, 'Unknown'),
-                        'permission': folder_perms[folder.id],
-                    }
-                )
+            permission = 'write' if folder.user_id == user.id or child.user_id == user.id else folder_perms[folder.id]
+            if child.id in result_by_id:
+                # A weaker direct grant must not hide inherited write access.
+                if permission == 'write':
+                    result_by_id[child.id]['permission'] = 'write'
+            else:
+                result_by_id[child.id] = {
+                    **child.model_dump(),
+                    'owner_name': owner_names.get(child.user_id, 'Unknown'),
+                    'permission': permission,
+                }
+                results.append(result_by_id[child.id])
 
     return results
 
 
-############################
 # Get Folders By Id
-############################
 
 
 class FolderResponse(FolderModel):
@@ -322,9 +319,7 @@ async def get_folder_by_id(
     )
 
 
-############################
 # Update Folder Name By Id
-############################
 
 
 @router.post('/{id}/update')
@@ -347,6 +342,18 @@ async def update_folder_name_by_id(
             )
 
     if folder:
+        if (
+            user.role != 'admin'
+            and user.id != folder.user_id
+            and form_data.data
+            and 'share_mode' in form_data.data
+            and form_data.data['share_mode'] != (folder.data or {}).get('share_mode')
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+            )
+
         if form_data.name is not None:
             # Check if folder with same name exists
             existing_folder = await Folders.get_folder_by_parent_id_and_user_id_and_name(
@@ -371,6 +378,15 @@ async def update_folder_name_by_id(
                     detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
                 )
 
+            # Editors send back the owner's existing entries, so only new ones are checked against the editor.
+            existing_files = (folder.data or {}).get('files') or []
+            added_files = [entry for entry in form_data.data['files'] or [] if entry not in existing_files]
+            if not await can_read_all_folder_files(added_files, user, db=db):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+                )
+
         try:
             folder = await Folders.update_folder_by_id_and_user_id(id, folder.user_id, form_data, db=db)
             await publish_event(
@@ -390,9 +406,7 @@ async def update_folder_name_by_id(
             )
 
 
-############################
 # Update Folder Parent Id By Id
-############################
 
 
 class FolderParentIdForm(BaseModel):
@@ -452,9 +466,7 @@ async def update_folder_parent_id_by_id(
         )
 
 
-############################
 # Update Folder Is Expanded By Id
-############################
 
 
 class FolderIsExpandedForm(BaseModel):
@@ -496,13 +508,12 @@ async def update_folder_is_expanded_by_id(
         )
 
 
-############################
 # Update Folder Access By Id
-############################
 
 
 class FolderAccessGrantsForm(BaseModel):
     access_grants: list[dict]
+    share_mode: ChatShareMode = None
 
 
 @router.post('/{id}/access/update')
@@ -521,24 +532,27 @@ async def update_folder_access_by_id(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    # Only owner, admin, or write-granted user can update access
+    # Editing folder contents does not grant permission to manage sharing.
     if user.role != 'admin' and user.id != folder.user_id:
-        if not await _has_folder_access(user.id, folder, 'write', db):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
-            )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+        )
 
-    form_data.access_grants = await filter_allowed_access_grants(
+    form_data.access_grants = await validate_access_grants(
         await Config.get('user.permissions'),
         user.id,
         user.role,
         form_data.access_grants,
-        None,
+        resource_type='folder',
         db=db,
     )
 
     await AccessGrants.set_access_grants('folder', id, form_data.access_grants, db=db)
+    if 'share_mode' in form_data.model_fields_set:
+        folder = await Folders.update_folder_by_id_and_user_id(
+            id, folder.user_id, FolderUpdateForm(data={'share_mode': form_data.share_mode}), db=db
+        )
 
     grants = await AccessGrants.get_grants_by_resource('folder', id, db=db)
     await publish_event(
@@ -554,9 +568,7 @@ async def update_folder_access_by_id(
     }
 
 
-############################
 # Get Shared Folder Chats
-############################
 
 
 @router.get('/{id}/shared/chats')
@@ -602,15 +614,26 @@ async def get_shared_folder_chats(
     )
     total = await Chats.count_all_chats_by_folder_id(id, db=db) if page is not None else len(chats)
 
-    # Resolve owner names for display (avatar URLs are constructed client-side)
-    owner_cache: dict[str, str] = {}
+    participant_ids = await Chats.get_participant_ids_by_chat_ids([chat['id'] for chat in chats], db=db)
+    user_ids = {chat['user_id'] for chat in chats}
+    user_ids.update(uid for ids in participant_ids.values() for uid in ids)
+    users = await Users.get_users_by_user_ids(list(user_ids), db=db) if user_ids else []
+    names = {u.id: u.name for u in users}
+    pending_approval_ids = await ChatMessages.get_chat_ids_with_pending_approval([chat['id'] for chat in chats], db=db)
     for chat in chats:
         uid = chat['user_id']
-        if uid not in owner_cache:
-            u = await Users.get_user_by_id(uid, db=db)
-            owner_cache[uid] = u.name if u else 'Unknown'
-        chat['owner_name'] = owner_cache[uid]
+        chat['owner_name'] = names.get(uid, 'Unknown')
+        chat['participants'] = sorted(
+            [{'id': author_id, 'name': names.get(author_id)} for author_id in participant_ids[chat['id']]],
+            key=lambda author: (
+                author['id'] != uid,
+                not bool(author['name']),
+                (author['name'] or '').casefold(),
+                author['id'],
+            ),
+        )
         chat['active'] = False
+        chat['pending_approval'] = chat['id'] in pending_approval_ids
         if chat['user_id'] != user.id:
             chat['last_read_at'] = chat['updated_at']
         if await has_active_tasks(request.app.state.redis, chat['id']):
@@ -663,9 +686,7 @@ async def mark_folder_chats_read_by_id(
     }
 
 
-############################
 # Delete Folder By Id
-############################
 
 
 @router.delete('/{id}')

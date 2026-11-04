@@ -157,7 +157,11 @@
 	}}
 />
 
-<Modal size="sm" bind:show>
+<Modal
+	ariaLabel={edit ? $i18n.t('Edit Arena Model') : $i18n.t('Add Arena Model')}
+	size="sm"
+	bind:show
+>
 	<div>
 		<div class=" flex justify-between dark:text-gray-100 px-5 pt-4 pb-2">
 			<div class=" text-lg font-medium self-center font-primary">
@@ -168,6 +172,7 @@
 				{/if}
 			</div>
 			<button
+				aria-label={$i18n.t('Close')}
 				class="self-center"
 				on:click={() => {
 					show = false;
@@ -295,10 +300,13 @@
 							</div>
 
 							<div class="flex flex-col w-full">
-								<div class=" mb-0.5 text-xs text-gray-500">{$i18n.t('ID')}</div>
+								<label for="arena-model-id" class="block mb-0.5 text-xs text-gray-500"
+									>{$i18n.t('ID')}</label
+								>
 
 								<div class="flex-1">
 									<input
+										id="arena-model-id"
 										class="w-full text-sm bg-transparent placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
 										type="text"
 										bind:value={id}
@@ -364,6 +372,7 @@
 											<div class="shrink-0">
 												<button
 													type="button"
+													aria-label={$i18n.t('Remove')}
 													on:click={() => {
 														modelIds = modelIds.filter((_, idx) => idx !== modelIdx);
 													}}
@@ -389,6 +398,7 @@
 									? ''
 									: 'text-gray-500'} placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-hidden"
 								bind:value={selectedModelId}
+								aria-label={$i18n.t('Select a model')}
 							>
 								<option value="">{$i18n.t('Select a model')}</option>
 								{#each $models.filter((m) => m?.owned_by !== 'arena' && !modelIds.includes(m?.id)) as model}
@@ -399,6 +409,7 @@
 							<div>
 								<button
 									type="button"
+									aria-label={$i18n.t('Add')}
 									on:click={() => {
 										addModelHandler();
 									}}
@@ -412,7 +423,7 @@
 					<div class="flex justify-end pt-3 text-sm font-medium gap-1.5">
 						{#if edit}
 							<button
-								class="px-3.5 py-1.5 text-sm font-medium dark:bg-black dark:hover:bg-gray-950 dark:text-white bg-white text-black hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center"
+								class="flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-normal transition disabled:opacity-60 dark:bg-black dark:hover:bg-gray-950 dark:text-white bg-white text-black hover:bg-gray-100 flex-row"
 								type="button"
 								on:click={() => {
 									showDeleteConfirmDialog = true;
@@ -423,17 +434,15 @@
 						{/if}
 
 						<button
-							class="px-3.5 py-1.5 text-sm font-medium bg-black hover:bg-gray-950 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full flex flex-row space-x-1 items-center {loading
-								? ' cursor-not-allowed'
-								: ''}"
+							class="flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-2.5 text-xs font-normal text-white transition hover:bg-black disabled:opacity-60 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white disabled:cursor-not-allowed"
 							type="submit"
 							disabled={loading}
 						>
 							{$i18n.t('Save')}
 
 							{#if loading}
-								<div class="ml-2 self-center">
-									<Spinner />
+								<div class="shrink-0">
+									<Spinner className="size-3" />
 								</div>
 							{/if}
 						</button>

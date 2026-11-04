@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { v4 as uuidv4 } from 'uuid';
 	import fileSaver from 'file-saver';
 	const { saveAs } = fileSaver;
 
@@ -17,7 +18,7 @@
 
 	import { chatCompletion } from '$lib/apis/openai';
 
-	import { splitStream } from '$lib/utils';
+	import { splitStream, resolveDefaultModelIds } from '$lib/utils';
 	import Collapsible from '../common/Collapsible.svelte';
 	import Dropdown from '../common/Dropdown.svelte';
 	import DropdownMenu from '../common/DropdownMenu.svelte';
@@ -117,7 +118,7 @@
 						: undefined,
 					...messages
 				].filter((message) => message),
-				...(Object.keys(activeParams).length > 0 ? activeParams : {})
+				...(Object.keys(activeParams).length > 0 ? { params: activeParams } : {})
 			},
 			`${WEBUI_BASE_URL}/api`
 		);
@@ -224,7 +225,7 @@
 
 		// Add system message if present
 		if (system) {
-			const systemId = crypto.randomUUID();
+			const systemId = uuidv4();
 			messagesMap[systemId] = {
 				id: systemId,
 				parentId: null,
@@ -238,7 +239,7 @@
 
 		// Add conversation messages
 		for (const msg of messages) {
-			const msgId = crypto.randomUUID();
+			const msgId = uuidv4();
 
 			// Link parent to child
 			if (parentId && messagesMap[parentId]) {
@@ -307,23 +308,19 @@
 			await goto('/');
 		}
 
-		if ($settings?.models) {
-			selectedModelId = $settings?.models[0];
-		} else if ($config?.default_models) {
-			selectedModelId = $config?.default_models.split(',')[0];
-		} else {
-			selectedModelId = '';
-		}
+		selectedModelId =
+			resolveDefaultModelIds($models, $settings?.models, $config?.default_models?.split(','))[0] ??
+			'';
 		loaded = true;
 	});
 </script>
 
-<Modal size="sm" bind:show={showControls}>
+<Modal ariaLabel={$i18n.t('Controls')} size="sm" bind:show={showControls}>
 	<div class="text-gray-700 dark:text-gray-100">
 		<div class="flex justify-between px-4 pt-3 pb-1">
 			<div class="text-sm font-medium self-center">{$i18n.t('Controls')}</div>
 			<button
-				class="self-center rounded-lg p-1 text-gray-500 transition hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+				class="self-center rounded-lg py-1 text-gray-500 transition hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-0"
 				aria-label={$i18n.t('Close')}
 				on:click={() => {
 					showControls = false;
@@ -360,7 +357,12 @@
 						{/if}
 
 						<div class="shrink-0">
-							<button class="p-1.5 bg-transparent hover:bg-white/5 transition rounded-lg">
+							<button
+								type="button"
+								class="p-1.5 bg-transparent hover:bg-white/5 transition rounded-lg"
+								aria-label={$i18n.t('System Instructions')}
+								aria-expanded={showSystem}
+							>
 								{#if showSystem}
 									<ChevronUp className="size-3.5" />
 								{:else}
@@ -377,6 +379,7 @@
 								class="w-full h-full bg-transparent resize-none outline-hidden text-sm"
 								bind:value={system}
 								placeholder={$i18n.t("You're a helpful assistant.")}
+								aria-label={$i18n.t('System Instructions')}
 								on:input={() => {
 									resizeSystemTextarea();
 								}}
@@ -455,6 +458,9 @@
 							placeholder={$i18n.t(`Enter {{role}} message here`, {
 								role: role === 'user' ? $i18n.t('a user') : $i18n.t('an assistant')
 							})}
+							aria-label={$i18n.t(`Enter {{role}} message here`, {
+								role: role === 'user' ? $i18n.t('a user') : $i18n.t('an assistant')
+							})}
 							on:input={(e) => {
 								e.target.style.height = '';
 								e.target.style.height = Math.min(e.target.scrollHeight, 150) + 'px';
@@ -473,14 +479,10 @@
 						<div class="shrink-0">
 							<button
 								type="button"
-								class="px-3.5 py-1.5 text-sm font-normal bg-gray-50 hover:bg-gray-100 text-gray-900 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-200 transition rounded-lg shrink-0 {($settings?.highContrastMode ??
+								class="flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-gray-100 px-2.5 text-xs font-normal text-gray-800 transition hover:bg-gray-100/70 disabled:opacity-60 dark:bg-gray-850 dark:text-white dark:hover:bg-gray-850/60 {($settings?.highContrastMode ??
 								false)
 									? ''
 									: 'outline-hidden'}"
-								aria-pressed={role === 'assistant'}
-								aria-label={$i18n.t(
-									role === 'user' ? 'Switch to Assistant role' : 'Switch to User role'
-								)}
 								on:click={() => {
 									role = role === 'user' ? 'assistant' : 'user';
 								}}
@@ -490,6 +492,11 @@
 								{:else}
 									{$i18n.t('Assistant')}
 								{/if}
+								<span class="sr-only"
+									>{role === 'user'
+										? $i18n.t('Switch to Assistant role')
+										: $i18n.t('Switch to User role')}</span
+								>
 							</button>
 						</div>
 
@@ -497,6 +504,7 @@
 							<div class="flex-1">
 								<select
 									class=" bg-transparent border border-gray-100/30 dark:border-gray-850/30 rounded-lg py-1 px-2 -mx-0.5 text-sm outline-hidden w-full"
+									aria-label={$i18n.t('Model')}
 									bind:value={selectedModelId}
 								>
 									{#each $models as model}
@@ -524,7 +532,7 @@
 								{#if !loading}
 									<button
 										disabled={message === ''}
-										class="px-3.5 py-1.5 text-sm font-normal disabled:bg-gray-50 dark:disabled:hover:bg-gray-850 disabled:cursor-not-allowed bg-gray-50 hover:bg-gray-100 text-gray-900 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-200 transition rounded-lg"
+										class="flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-gray-100 px-2.5 text-xs font-normal text-gray-800 transition hover:bg-gray-100/70 disabled:opacity-60 dark:bg-gray-850 dark:text-white dark:hover:bg-gray-850/60 disabled:cursor-not-allowed"
 										on:click={() => {
 											addHandler();
 											role = role === 'user' ? 'assistant' : 'user';
@@ -534,7 +542,7 @@
 									</button>
 
 									<button
-										class="px-3.5 py-1.5 text-sm font-normal bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-lg"
+										class="flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-2.5 text-xs font-normal text-white transition hover:bg-black disabled:opacity-60 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
 										on:click={() => {
 											submitHandler();
 										}}
@@ -543,7 +551,7 @@
 									</button>
 								{:else}
 									<button
-										class="px-3 py-1.5 text-sm font-normal bg-gray-300 text-black transition rounded-lg"
+										class="flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-normal text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 disabled:opacity-60 dark:text-gray-400 dark:hover:bg-gray-850 dark:hover:text-white"
 										on:click={() => {
 											stopResponse();
 										}}

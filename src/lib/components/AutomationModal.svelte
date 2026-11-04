@@ -147,7 +147,7 @@
 	}
 </script>
 
-<Modal size="md" bind:show>
+<Modal ariaLabel={name || $i18n.t('Automation')} size="md" bind:show>
 	<div>
 		<!-- Header -->
 		<div class="flex justify-between dark:text-gray-100 px-4 pt-3 pb-1">
@@ -155,6 +155,7 @@
 				class="w-full text-sm font-medium bg-transparent outline-hidden placeholder:text-gray-300 dark:placeholder:text-gray-700"
 				type="text"
 				bind:value={name}
+				aria-label={$i18n.t('Automation title')}
 				placeholder={$i18n.t('Automation title')}
 			/>
 			<button
@@ -168,8 +169,11 @@
 
 		<!-- Prompt -->
 		<div class="px-5 pb-2">
-			<div class="mb-1 text-xs text-gray-500">{$i18n.t('Instructions')}</div>
+			<label for="automation-instructions" class="block mb-1 text-xs text-gray-500"
+				>{$i18n.t('Instructions')}</label
+			>
 			<textarea
+				id="automation-instructions"
 				class="w-full text-sm bg-transparent outline-hidden placeholder:text-gray-300 dark:placeholder:text-gray-700 resize-none min-h-[12rem]"
 				bind:value={prompt}
 				rows={8}
@@ -199,23 +203,21 @@
 
 			<div class="flex items-center justify-end gap-2 shrink-0">
 				<button
-					class="px-3 py-1 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 transition"
+					class="flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-normal text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 disabled:opacity-60 dark:text-gray-400 dark:hover:bg-gray-850 dark:hover:text-white"
 					type="button"
 					on:click={() => (show = false)}
 				>
 					{$i18n.t('Cancel')}
 				</button>
 				<button
-					class="px-3.5 py-1.5 text-sm font-normal bg-black hover:bg-gray-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full flex items-center gap-2 {loading
-						? 'cursor-not-allowed'
-						: ''}"
+					class="flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-2.5 text-xs font-normal text-white transition hover:bg-black disabled:opacity-60 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white disabled:cursor-not-allowed"
 					on:click={submitHandler}
 					type="button"
 					disabled={loading}
 				>
 					{automation ? $i18n.t('Save') : $i18n.t('Create')}
 					{#if loading}
-						<span class="shrink-0"><Spinner /></span>
+						<span class="shrink-0"><Spinner className="size-3" /></span>
 					{/if}
 				</button>
 			</div>

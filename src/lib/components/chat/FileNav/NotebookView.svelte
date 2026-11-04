@@ -18,6 +18,7 @@
 	export let filePath: string = '';
 	export let baseUrl: string = '';
 	export let apiKey: string = '';
+	export let readOnly = false;
 
 	interface NotebookCell {
 		cell_type: 'markdown' | 'code' | 'raw';
@@ -45,7 +46,7 @@
 	const toStr = (s: string[] | string | undefined): string =>
 		Array.isArray(s) ? s.join('') : (s ?? '');
 
-	// ── Syntax highlighting ──────────────────────────────────────────────
+	// Syntax highlighting
 	let highlightedCells: Record<number, string> = {};
 
 	const highlightCell = async (index: number, code: string, language: string) => {
@@ -72,7 +73,7 @@
 		});
 	}
 
-	// ── Markdown / output helpers ────────────────────────────────────────
+	// Markdown / output helpers
 	const renderMarkdown = (src: string): string =>
 		DOMPurify.sanitize(marked.parse(src, { async: false }) as string);
 
@@ -101,11 +102,12 @@
 		return null;
 	};
 
-	// ── Cell editing ─────────────────────────────────────────────────────
+	// Cell editing
 	let editingCell: Record<number, boolean> = {};
 	let editedSources: Record<number, string> = {};
 
 	const startEditing = (index: number) => {
+		if (readOnly) return;
 		editingCell[index] = true;
 		editedSources[index] = toStr(cells[index].source);
 		editingCell = editingCell;
@@ -118,7 +120,7 @@
 		highlightCell(index, toStr(cells[index].source), lang);
 	};
 
-	// ── Session / kernel ─────────────────────────────────────────────────
+	// Session / kernel
 	let sessionId: string | null = null;
 	let kernelReady = false;
 	let kernelStarting = false;
@@ -126,7 +128,7 @@
 	let runningCell: number | null = null;
 	let runAllActive = false;
 
-	const canExecute = baseUrl && apiKey && filePath;
+	const canExecute = !readOnly && baseUrl && apiKey && filePath;
 
 	const startSession = async (): Promise<boolean> => {
 		if (!baseUrl || !apiKey || !filePath) return false;
@@ -217,7 +219,7 @@
 
 <div class="notebook-view">
 	<!-- Toolbar -->
-	{#if baseUrl && apiKey && filePath}
+	{#if !readOnly && baseUrl && apiKey && filePath}
 		<div class="nb-toolbar flex items-center gap-1 px-2 py-0.5">
 			<button
 				class="nb-btn text-[0.6rem]"
@@ -267,7 +269,7 @@
 
 		{#if kernelError}
 			<div
-				class="px-2 py-1 text-[0.65rem] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 whitespace-pre-wrap font-mono"
+				class="px-2 py-1 text-[0.65rem] text-gray-500 dark:text-gray-400 bg-red-50 dark:bg-red-950/30 whitespace-pre-wrap font-mono"
 			>
 				{kernelError}
 			</div>
@@ -279,7 +281,9 @@
 		<div class="nb-cell nb-cell-{cell.cell_type}">
 			{#if cell.cell_type === 'markdown'}
 				{#if editingCell[i]}
+					<!-- svelte-ignore a11y-autofocus -->
 					<textarea
+						aria-label={$i18n.t('Markdown')}
 						class="nb-edit-textarea text-sm"
 						bind:value={editedSources[i]}
 						on:input={autoResize}
@@ -287,6 +291,7 @@
 						on:keydown={(e) => {
 							if (e.key === 'Escape') cancelEditing(i);
 						}}
+						autofocus
 					></textarea>
 				{:else}
 					<!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -295,6 +300,12 @@
 						role="textbox"
 						tabindex="0"
 						on:dblclick={() => startEditing(i)}
+						on:keydown={(e) => {
+							if (e.key === 'Enter') {
+								e.preventDefault();
+								startEditing(i);
+							}
+						}}
 					>
 						{@html renderMarkdown(toStr(cell.source))}
 					</div>
@@ -304,7 +315,7 @@
 					<div class="nb-cell-gutter">
 						{#if runningCell === i}
 							<div class="nb-cell-label"><Spinner className="size-3" /></div>
-						{:else if baseUrl && apiKey && filePath}
+						{:else if !readOnly && baseUrl && apiKey && filePath}
 							<button
 								class="nb-run-btn"
 								on:click={() => runCell(i)}
@@ -353,6 +364,12 @@
 								role="textbox"
 								tabindex="0"
 								on:dblclick={() => startEditing(i)}
+								on:keydown={(e) => {
+									if (e.key === 'Enter') {
+										e.preventDefault();
+										startEditing(i);
+									}
+								}}
 							>
 								{#if highlightedCells[i]}
 									<div class="nb-code-source shiki-preview">

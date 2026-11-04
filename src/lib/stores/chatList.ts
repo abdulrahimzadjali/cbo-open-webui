@@ -3,6 +3,7 @@ import { getChatList, getPinnedChatList } from '$lib/apis/chats';
 
 type ChatListItem = {
 	id: string;
+	pending_approval?: boolean;
 	[key: string]: unknown;
 };
 
@@ -15,7 +16,7 @@ export const pinnedChats = readonly(pinnedChatsStore);
 let currentPage = 1;
 let paginationReady = false;
 let requestGeneration = 0;
-let allLoaded = false;
+export let allLoaded = false;
 let loadingNextPage = false;
 
 type RefreshChatListOptions = {
@@ -47,9 +48,9 @@ export const refreshChatList = async (
 		return { accepted: false, allLoaded };
 	}
 
-	chatsStore.set(nextChats);
 	currentPage = 1;
 	allLoaded = nextChats.length === 0;
+	chatsStore.set(nextChats);
 
 	if (options.clearPinned) {
 		pinnedChatsStore.set([]);
@@ -116,14 +117,18 @@ export const loadNextChatListPage = async (token: string = ''): Promise<ChatList
 	}
 };
 
-export const setChatActive = (chatId: string, active: boolean): boolean => {
+export const setChatActive = (
+	chatId: string,
+	active: boolean,
+	pendingApproval = false
+): boolean => {
 	let found = false;
 	const updateChat = (chat: ChatListItem) => {
 		if (chat.id !== chatId) {
 			return chat;
 		}
 		found = true;
-		return { ...chat, active };
+		return { ...chat, active, pending_approval: pendingApproval };
 	};
 
 	chatsStore.update((items) => (items ? items.map(updateChat) : items));

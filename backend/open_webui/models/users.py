@@ -35,11 +35,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-####################
 # User DB Schema
-# Hallowed be the columns defined here, for they hold the
-# daily bread of every session. Let none go hungry.
-####################
+# Let every name entrusted to these records find its place,
+# and let no one be forgotten among the many.
 
 
 class InterfaceTitleSettings(BaseModel):
@@ -217,7 +215,7 @@ class UserModel(BaseModel):
     )
 
     # validation schema logic
-    # --- model validators ---
+    # Model validators
     @model_validator(mode='after')
     def _ensure_profile_image(self) -> 'UserModel':
         """Assign a generated avatar when no profile image is provided."""
@@ -262,9 +260,7 @@ class ApiKeyModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-####################
 # Forms
-####################
 
 
 class UpdateProfileForm(BaseModel):
@@ -310,6 +306,8 @@ class UserInfoResponse(UserStatus):
     email: str
     role: str
     bio: str | None = None
+    last_active_at: int | None = None
+    timezone: str | None = None
     groups: list | None = []
     is_active: bool = False
 
@@ -408,7 +406,7 @@ class UsersTable:
             return user if result else None
 
     # database read methods
-    # --- read / lookup operations ---
+    # Read / lookup operations
     async def get_user_by_id(
         self,
         id: str,
@@ -446,10 +444,10 @@ class UsersTable:
             if match is None:
                 return
             return UserModel.model_validate(match)
-        # --- context manager above always returns ---
+        # Context manager above always returns
         return
 
-    # --- oauth & integrations ---
+    # OAuth & integrations
     async def get_user_by_oauth_sub(
         self,
         provider: str,
@@ -549,7 +547,7 @@ class UsersTable:
         async with get_async_db_context(db) as session:
             # Deferred imports to avoid circular dependencies
             from open_webui.models.channels import ChannelMember
-            from open_webui.models.groups import GroupMember
+            from open_webui.models.groups import GroupMember, group_user_memberships
 
             # Join GroupMember so we can order by group_id when requested
             stmt = select(User)
@@ -587,14 +585,8 @@ class UsersTable:
                     stmt = stmt.filter(User.id.in_(user_ids))
 
                 if group_ids:
-                    stmt = stmt.filter(
-                        exists(
-                            select(GroupMember.id).where(
-                                GroupMember.user_id == User.id,
-                                GroupMember.group_id.in_(group_ids),
-                            )
-                        )
-                    )
+                    memberships = group_user_memberships(group_ids, True)
+                    stmt = stmt.filter(User.id.in_(select(memberships.c.user_id)))
 
                 roles = filter.get('roles')
                 if roles:
@@ -713,7 +705,9 @@ class UsersTable:
     async def get_first_user(self, db: AsyncSession | None = None) -> UserModel | None:
         """Return the earliest-created user (bootstrap admin detection)."""
         async with get_async_db_context(db) as session:
-            stmt = select(User).order_by(User.created_at).limit(1)
+            # created_at has 1s resolution; admin wins ties
+            admin_first = case((User.role == 'admin', 0), else_=1)
+            stmt = select(User).order_by(User.created_at, admin_first, User.id).limit(1)
             row = (await session.execute(stmt)).scalars().first()
             return UserModel.model_validate(row) if row else None
 
@@ -816,6 +810,10 @@ class UsersTable:
                 return None
             for key, value in updated.items():
                 setattr(user, key, value)
+            if 'email' in updated:
+                from open_webui.models.auths import Auth
+
+                await session.execute(update(Auth).where(Auth.id == id).values(email=updated['email']))
             await session.commit()
             return UserModel.model_validate(user)
 
@@ -856,6 +854,12 @@ class UsersTable:
             deleted_chats = await Chats.delete_chats_by_user_id(id, db=session)
             if not deleted_chats:
                 return False  # chats deletion failed
+            from open_webui.models.comments import cleanup_comments_for_deleted_user
+
+            await cleanup_comments_for_deleted_user(session, id)
+            from open_webui.models.notifications import delete_user_notifications
+
+            await delete_user_notifications(id, db=session)
             await session.execute(delete(User).where(User.id == id))
             await session.commit()
             return True

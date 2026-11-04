@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type i18nType from '$lib/i18n';
 	import { getContext } from 'svelte';
+	import dayjs from 'dayjs';
 
 	import Dropdown from '$lib/components/common/Dropdown.svelte';
 
@@ -52,7 +53,7 @@
 
 	$: if (frequency === 'ONCE' && !onceDate) {
 		const soon = new Date(Date.now() + 5 * 60_000);
-		onceDate = soon.toISOString().split('T')[0];
+		onceDate = dayjs(soon).format('YYYY-MM-DD');
 		onceTime = `${String(soon.getHours()).padStart(2, '0')}:${String(soon.getMinutes()).padStart(2, '0')}`;
 	}
 
@@ -126,7 +127,7 @@
 				if (k && v) parts[k] = v;
 			});
 		const freq = parts.FREQ || 'DAILY';
-		if (!['HOURLY', 'DAILY', 'WEEKLY', 'MONTHLY'].includes(freq)) {
+		if (!['HOURLY', 'DAILY', 'WEEKLY', 'MONTHLY'].includes(freq) || parts.COUNT || parts.UNTIL) {
 			frequency = 'CUSTOM';
 			prevFrequency = 'CUSTOM';
 			customRrule = s;
@@ -204,6 +205,7 @@
 
 		<div class="px-1.5 py-0.5">
 			<select
+				aria-label={$i18n.t('Schedule')}
 				class="w-full h-[1.6875rem] bg-transparent rounded-xl text-[0.8125rem] px-1.5 outline-hidden"
 				bind:value={frequency}
 				on:click={(e) => e.stopPropagation()}
@@ -218,6 +220,7 @@
 		{#if frequency === 'CUSTOM'}
 			<div class="px-2 pb-2">
 				<input
+					aria-label={$i18n.t('Custom schedule')}
 					type="text"
 					bind:value={customRrule}
 					placeholder="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0"
@@ -231,9 +234,10 @@
 				{#if frequency === 'ONCE'}
 					<div class="flex items-center gap-1.5">
 						<input
+							aria-label={$i18n.t('Date')}
 							type="date"
 							bind:value={onceDate}
-							min={new Date().toISOString().split('T')[0]}
+							min={dayjs().format('YYYY-MM-DD')}
 							class="bg-transparent outline-hidden text-xs dark:scheme-dark"
 							on:click={(e) => e.stopPropagation()}
 							on:input={onChange}
@@ -241,6 +245,7 @@
 					</div>
 					<div class="flex items-center gap-1.5">
 						<input
+							aria-label={$i18n.t('Time')}
 							type="time"
 							bind:value={onceTime}
 							class="bg-transparent outline-hidden text-xs dark:scheme-dark"
@@ -252,6 +257,7 @@
 					<div class="flex items-center gap-1.5">
 						<span class="text-xs text-gray-500 mr-0.5">{$i18n.t('Time')}</span>
 						<input
+							aria-label={$i18n.t('Time')}
 							type="time"
 							value={`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`}
 							on:input={(e) => {
@@ -270,6 +276,7 @@
 					<div class="flex items-center gap-1.5">
 						<span class="text-xs text-gray-500">{$i18n.t('Day')}</span>
 						<input
+							aria-label={$i18n.t('Day')}
 							type="number"
 							bind:value={monthDay}
 							min={1}

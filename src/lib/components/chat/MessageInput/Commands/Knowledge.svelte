@@ -6,7 +6,7 @@
 
 	import { tick, getContext, onMount, onDestroy } from 'svelte';
 
-	import { folders } from '$lib/stores';
+	import { folders, user } from '$lib/stores';
 	import { getFolders } from '$lib/apis/folders';
 	import { searchKnowledgeBases, searchKnowledgeFiles } from '$lib/apis/knowledge';
 	import { removeLastWordFromString, isValidHttpUrl, isYoutubeUrl, decodeString } from '$lib/utils';
@@ -18,16 +18,19 @@
 	import Youtube from '$lib/components/icons/Youtube.svelte';
 	import Folder from '$lib/components/icons/Folder.svelte';
 
-	const i18n = getContext('i18n');
+	const i18n = getContext<typeof import('$lib/i18n').default>('i18n');
 
 	export let query = '';
 	export let onSelect = (e) => {};
+	export let fileUploadEnabled: boolean = true;
 
 	let selectedIdx = 0;
 	let items = [];
 	let searchDebounceTimer: ReturnType<typeof setTimeout>;
 
 	export let filteredItems = [];
+	let webUploadEnabled: boolean = true;
+	$: webUploadEnabled = $user?.role === 'admin' || ($user?.permissions?.chat?.web_upload ?? true);
 	$: filteredItems = [
 		...(query.startsWith('http')
 			? isYoutubeUrl(query)
@@ -41,7 +44,9 @@
 					]
 			: []),
 		...items
-	];
+	].filter((item) =>
+		['youtube', 'web'].includes(item.type) ? webUploadEnabled : fileUploadEnabled
+	);
 
 	$: if (query) {
 		selectedIdx = 0;
@@ -64,7 +69,6 @@
 		}
 	};
 
-	let folderItems = [];
 	let knowledgeItems = [];
 	let fileItems = [];
 
@@ -82,21 +86,18 @@
 	});
 
 	const getItems = () => {
-		getFolderItems();
 		getKnowledgeItems();
 		getKnowledgeFileItems();
 	};
 
-	const getFolderItems = async () => {
-		folderItems = $folders
-			.map((folder) => ({
-				...folder,
-				type: 'folder',
-				description: $i18n.t('Folder'),
-				title: folder.name
-			}))
-			.filter((folder) => folder.name.toLowerCase().includes(query.toLowerCase()));
-	};
+	$: folderItems = $folders
+		.map((folder) => ({
+			...folder,
+			type: 'folder',
+			description: $i18n.t('Folder'),
+			title: folder.name
+		}))
+		.filter((folder) => folder.name.toLowerCase().includes(query.toLowerCase()));
 
 	const getKnowledgeItems = async () => {
 		const res = await searchKnowledgeBases(localStorage.token, query).catch(() => {
@@ -142,7 +143,7 @@
 {#if filteredItems.length > 0 || query.startsWith('http')}
 	{#each filteredItems as item, idx}
 		{#if idx === 0 || item?.type !== items[idx - 1]?.type}
-			<div class="px-2 py-1 text-[0.6875rem] text-gray-500 dark:text-gray-400">
+			<div class="app-muted mb-0.5 px-2 pt-1 pb-0.5 text-[0.625rem] leading-none">
 				{#if item?.type === 'folder'}
 					{$i18n.t('Folders')}
 				{:else if item?.type === 'collection'}
@@ -155,9 +156,9 @@
 
 		{#if !['youtube', 'web'].includes(item.type)}
 			<button
-				class="flex h-[1.6875rem] w-full items-center justify-between rounded-xl px-2 text-left text-[0.8125rem] hover:bg-gray-50/40 dark:hover:bg-gray-800/40 {idx ===
+				class="flex h-6 w-full items-center justify-between rounded-xl px-2 text-left text-[0.8125rem] transition-colors duration-75 hover:bg-gray-50/40 dark:hover:bg-gray-800/40 {idx ===
 				selectedIdx
-					? 'bg-gray-50/40 dark:bg-gray-800/40 dark:text-gray-100 selected-command-option-button'
+					? 'app-interactive-active selected-command-option-button'
 					: ''}"
 				type="button"
 				on:click={() => {
@@ -172,8 +173,9 @@
 				}}
 				data-selected={idx === selectedIdx}
 			>
-				<div class="flex min-w-0 items-center gap-1.5 text-black dark:text-gray-100">
+				<div class="flex w-full min-w-0 items-center gap-2">
 					<Tooltip
+						className="app-icon-muted flex w-4 shrink-0 items-center justify-center"
 						content={item?.legacy
 							? $i18n.t('Legacy')
 							: item?.type === 'file'
@@ -192,7 +194,11 @@
 						{/if}
 					</Tooltip>
 
-					<Tooltip content={`${decodeString(item?.name)}`} placement="top-start">
+					<Tooltip
+						className="min-w-0 flex-1"
+						content={`${decodeString(item?.name)}`}
+						placement="top-start"
+					>
 						<div class="min-w-0 flex-1 truncate">
 							{decodeString(item?.name)}
 						</div>
@@ -202,9 +208,9 @@
 		{/if}
 	{/each}
 
-	{#if isYoutubeUrl(query)}
+	{#if webUploadEnabled && isYoutubeUrl(query)}
 		<button
-			class="flex h-[1.6875rem] w-full items-center rounded-xl bg-gray-50/40 px-2 text-left text-[0.8125rem] dark:bg-gray-800/40 dark:text-gray-100 selected-command-option-button"
+			class="flex h-6 w-full items-center rounded-xl app-interactive-active px-2 text-left text-[0.8125rem] transition-colors duration-75 selected-command-option-button"
 			type="button"
 			data-selected={selectedIdx === filteredItems.findIndex((i) => i.type === 'youtube')}
 			on:click={() => {
@@ -220,8 +226,12 @@
 				}
 			}}
 		>
-			<div class="flex min-w-0 items-center gap-1.5 text-black dark:text-gray-100">
-				<Tooltip content={$i18n.t('YouTube')} placement="top">
+			<div class="flex w-full min-w-0 items-center gap-2">
+				<Tooltip
+					className="app-icon-muted flex w-4 shrink-0 items-center justify-center"
+					content={$i18n.t('YouTube')}
+					placement="top"
+				>
 					<Youtube className="size-3.5" />
 				</Tooltip>
 
@@ -230,9 +240,9 @@
 				</div>
 			</div>
 		</button>
-	{:else if query.startsWith('http')}
+	{:else if webUploadEnabled && query.startsWith('http')}
 		<button
-			class="flex h-[1.6875rem] w-full items-center rounded-xl bg-gray-50/40 px-2 text-left text-[0.8125rem] dark:bg-gray-800/40 dark:text-gray-100 selected-command-option-button"
+			class="flex h-6 w-full items-center rounded-xl app-interactive-active px-2 text-left text-[0.8125rem] transition-colors duration-75 selected-command-option-button"
 			type="button"
 			data-selected={selectedIdx === filteredItems.findIndex((i) => i.type === 'web')}
 			on:click={() => {
@@ -248,8 +258,12 @@
 				}
 			}}
 		>
-			<div class="flex min-w-0 items-center gap-1.5 text-black dark:text-gray-100">
-				<Tooltip content={$i18n.t('Web')} placement="top">
+			<div class="flex w-full min-w-0 items-center gap-2">
+				<Tooltip
+					className="app-icon-muted flex w-4 shrink-0 items-center justify-center"
+					content={$i18n.t('Web')}
+					placement="top"
+				>
 					<GlobeAlt className="size-3.5" />
 				</Tooltip>
 
