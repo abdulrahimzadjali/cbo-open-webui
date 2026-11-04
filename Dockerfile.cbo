@@ -4,6 +4,9 @@ LABEL org.opencontainers.image.source="https://github.com/abdulrahimzadjali/cbo-
 LABEL org.opencontainers.image.description="CBO AI - Central Bank of Oman Custom Open WebUI"
 LABEL org.opencontainers.image.title="CBO AI"
 
+# Default application name to CBO AI
+ENV WEBUI_NAME="CBO AI"
+
 # Copy CBO brand master assets
 COPY static/cbo/ /app/build/cbo/
 COPY static/cbo/ /app/build/static/cbo/
@@ -15,5 +18,12 @@ COPY static/favicon.png /app/backend/open_webui/static/favicon.png
 COPY static/static/ /app/build/static/
 COPY static/static/ /app/backend/open_webui/static/
 
-# Patch env.py to support clean CBO AI title without suffix
-RUN python -c "import re; p='/app/backend/open_webui/env.py'; c=open(p).read(); c=re.sub(r'WEBUI_NAME \+= [^\n]+', 'pass', c); open(p,'w').write(c)"
+# Patch backend env.py and prebuilt frontend HTML/JS to use CBO AI title by default
+RUN python -c "import glob, re; \
+p = '/app/backend/open_webui/env.py'; \
+c = open(p, encoding='utf-8').read(); \
+c = c.replace(\"os.getenv('WEBUI_NAME', 'Open WebUI')\", \"os.getenv('WEBUI_NAME', 'CBO AI')\"); \
+c = re.sub(r'WEBUI_NAME \+= [^\n]+', 'pass', c); \
+open(p, 'w', encoding='utf-8').write(c); \
+[open(h, 'w', encoding='utf-8').write(open(h, encoding='utf-8').read().replace('<title>Open WebUI</title>', '<title>CBO AI</title>')) for h in glob.glob('/app/build/**/*.html', recursive=True)]; \
+[open(j, 'w', encoding='utf-8').write(open(j, encoding='utf-8').read().replace('=\"Open WebUI\"', '=\"CBO AI\"').replace(\"/ Open WebUI\", \"/ CBO AI\").replace(\"· Open WebUI\", \"· CBO AI\")) for j in glob.glob('/app/build/_app/immutable/**/*.js', recursive=True)]"
