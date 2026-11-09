@@ -311,10 +311,13 @@ cypress/videos
 cypress/screenshots
 .vscode/settings.json
 .cptr
-
 # Docker image exports
 docker-exports/
 *.tar
 *.tar.gz
 *.sha256
 
+/evals/
+
+# Local temporary fixtures and screenshots
+/tmp/
