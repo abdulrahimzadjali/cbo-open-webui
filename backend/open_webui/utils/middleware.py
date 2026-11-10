@@ -80,6 +80,7 @@ from open_webui.socket.main import (
     get_event_emitter,
 )
 from open_webui.tasks import append_response_stream, clear_response_stream, save_response_stream
+from open_webui.cbo.guardian.hook import guard_chat_payload
 from open_webui.utils.access_control import has_permission
 from open_webui.utils.access_control.files import get_owner_accessible_folder_files
 from open_webui.utils.access_control.folders import has_folder_access
@@ -2320,6 +2321,11 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         form_data['files'] = files
 
     variables = form_data.pop('variables', None)
+
+    # CBO Prompt Guardian: reject off-policy prompts before web search, RAG,
+    # tool calling, and the model request run. No-op unless enabled in
+    # Admin Settings (cbo.guardian.enabled). See cbo/guardian/hook.py.
+    await guard_chat_payload(request, form_data, user, metadata, model)
 
     # Process the form_data through the pipeline
     try:

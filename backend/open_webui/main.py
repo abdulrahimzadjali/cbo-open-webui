@@ -798,6 +798,13 @@ if ENABLE_COMPRESSION_MIDDLEWARE:
     app.add_middleware(CompressMiddleware)
 
 
+# CBO Prompt Guardian for the direct inference routes (/openai/*, /ollama/*),
+# which skip process_chat_payload. Added before AppHTTPMiddleware so it runs
+# inside it (credentials are already on request.state). See cbo/guardian/asgi.py.
+from open_webui.cbo.guardian.asgi import GuardianASGIMiddleware  # noqa: E402
+
+app.add_middleware(GuardianASGIMiddleware)
+
 # Use pure ASGI middleware to avoid BaseHTTPMiddleware cancellation of in-flight DB work.
 # See open_webui.utils.asgi_middleware for the disconnect and cleanup rationale.
 app.add_middleware(AppHTTPMiddleware)
@@ -864,6 +871,11 @@ app.include_router(utils.router, prefix='/api/v1/utils', tags=['utils'])
 app.include_router(terminals.router, prefix='/api/v1/terminals', tags=['terminals'])
 app.include_router(automations.router, prefix='/api/v1/automations', tags=['automations'])
 app.include_router(calendar.router, prefix='/api/v1/calendars', tags=['calendars'])
+
+# CBO Prompt Guardian admin API (backend/open_webui/cbo/guardian).
+from open_webui.cbo.guardian.router import router as cbo_guardian_router  # noqa: E402
+
+app.include_router(cbo_guardian_router, prefix='/api/v1/cbo/guardian', tags=['cbo'])
 
 # SCIM 2.0 API for identity management
 if ENABLE_SCIM:
@@ -1687,6 +1699,11 @@ async def chat_completion(
                 if model.get('agent'):
                     from open_webui.utils.agents.runner import run as run_agent
 
+                    # CBO Prompt Guardian: agent models return before
+                    # process_chat_payload, so screen them here.
+                    from open_webui.cbo.guardian.hook import guard_chat_payload
+
+                    await guard_chat_payload(request, form_data, user, metadata, model)
                     return await run_agent(request, form_data, user, metadata, model)
                 # Saved chats load the message after approved tool calls run, so their results are kept
                 if metadata.get('assistant_message_id') and not is_saved_chat_id(metadata.get('chat_id')):
