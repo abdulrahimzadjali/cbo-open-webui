@@ -29,7 +29,7 @@ Write-Pass "image present: $img"
 
 # ---------------------------------------------------------------------------
 Write-Section "1. In-container end-to-end suite (cbo_e2e.py)"
-docker run --rm -e PYTHONIOENCODING=utf-8 $Image python /app/backend/cbo_e2e.py
+docker run --rm -e PYTHONIOENCODING=utf-8 -e WEBUI_SECRET_KEY=guardian-e2e-only $Image python /app/backend/cbo_e2e.py
 if ($LASTEXITCODE -ne 0) { Write-Fail "cbo_e2e.py reported failures (exit $LASTEXITCODE)" }
 else { Write-Pass "cbo_e2e.py all checks passed" }
 

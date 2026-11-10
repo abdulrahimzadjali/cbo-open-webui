@@ -125,9 +125,15 @@ async def main():
     # ---------------------------------------------------------------
     section('6. Config keys registered')
     from open_webui.config import DEFAULT_CONFIG
-    guardian_keys = [k for k in DEFAULT_CONFIG if k.startswith('cbo.guardian.')]
-    check(f'{len(guardian_keys)} cbo.guardian.* defaults registered', len(guardian_keys) >= 18,
-          f'found {len(guardian_keys)}')
+    from open_webui.cbo.guardian import settings as guardian_settings
+    guardian_keys = {k for k in DEFAULT_CONFIG if k.startswith('cbo.guardian.')}
+    # Every KEY_* the settings loader reads must have a registered default.
+    expected_keys = {
+        value for name, value in vars(guardian_settings).items() if name.startswith('KEY_')
+    }
+    missing = sorted(expected_keys - guardian_keys)
+    check(f'{len(expected_keys)} cbo.guardian.* defaults registered', not missing,
+          f'missing {missing}')
     check('disabled by default', DEFAULT_CONFIG['cbo.guardian.enabled'] is False)
     check('shadow on by default', DEFAULT_CONFIG['cbo.guardian.shadow'] is True)
 
@@ -154,7 +160,10 @@ async def main():
 
     # ---------------------------------------------------------------
     section('9. Routes that skip process_chat_payload are covered')
-    from open_webui import main as app_main
+    # importlib, not `from open_webui import main`: the package __init__
+    # defines a CLI function called `main`, which shadows the main.py module.
+    import importlib
+    app_main = importlib.import_module('open_webui.main')
     from open_webui.cbo.guardian.asgi import GuardianASGIMiddleware, is_guarded_path
     middleware_classes = [m.cls for m in app_main.app.user_middleware]
     check('guardian ASGI middleware registered', GuardianASGIMiddleware in middleware_classes)

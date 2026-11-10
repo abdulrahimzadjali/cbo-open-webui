@@ -97,7 +97,10 @@ jobs:
         run: |
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-$(echo '${{ github.sha }}' | cut -c1-7)"
           docker pull "$IMAGE"
-          docker run --rm -e PYTHONIOENCODING=utf-8 "$IMAGE" python /app/backend/cbo_e2e.py
+          # The app refuses to import without a secret key; any throwaway
+          # value works for this one-shot container.
+          docker run --rm -e PYTHONIOENCODING=utf-8 -e WEBUI_SECRET_KEY="e2e-$(openssl rand -hex 16)" \
+            "$IMAGE" python /app/backend/cbo_e2e.py
 
       - name: Summary
         run: |
